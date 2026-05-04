@@ -1,0 +1,23 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gateway:9100"]
+
+  - job_name: auth-issuer
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["auth-issuer:9100"]
+
+  - job_name: opa
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["opa:8181"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
