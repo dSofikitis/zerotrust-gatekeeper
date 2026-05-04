@@ -3,13 +3,14 @@
 use std::env;
 use std::net::SocketAddr;
 
-/// Top-level runtime config. TLS is optional so the gateway can run
-/// in dev mode without certs; in any real deployment all three TLS
-/// paths must be set.
+/// Top-level runtime config. TLS and Auth are both optional so the
+/// gateway can run in dev mode without certs and without a real IdP;
+/// in any real deployment both must be set.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub addr: SocketAddr,
     pub tls: Option<TlsConfig>,
+    pub auth: Option<AuthConfig>,
     pub upstream_url: String,
 }
 
@@ -21,6 +22,16 @@ pub struct TlsConfig {
     pub server_cert: String,
     pub server_key: String,
     pub client_ca: String,
+}
+
+/// JWKS endpoint + the JWT validation parameters. When this is
+/// `Some`, the gateway gates non-`/healthz` requests on a verifiable
+/// bearer token whose `iss` and `aud` match.
+#[derive(Debug, Clone)]
+pub struct AuthConfig {
+    pub jwks_url: String,
+    pub issuer: String,
+    pub audience: String,
 }
 
 impl Config {
@@ -44,12 +55,23 @@ impl Config {
             _ => None,
         };
 
+        let auth = env::var("GATEWAY_AUTH_JWKS_URL")
+            .ok()
+            .map(|jwks_url| AuthConfig {
+                jwks_url,
+                issuer: env::var("GATEWAY_AUTH_ISSUER")
+                    .unwrap_or_else(|_| "zt-auth-issuer".to_string()),
+                audience: env::var("GATEWAY_AUTH_AUDIENCE")
+                    .unwrap_or_else(|_| "zt-gateway".to_string()),
+            });
+
         let upstream_url = env::var("GATEWAY_UPSTREAM_URL")
             .unwrap_or_else(|_| "http://backend-echo:8082".to_string());
 
         Self {
             addr,
             tls,
+            auth,
             upstream_url,
         }
     }

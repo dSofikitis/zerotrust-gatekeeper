@@ -55,6 +55,28 @@ services:
     ports:
       - "8082:8082"
 
+  gateway:
+    build:
+      context: ../../services/gateway
+    image: zerotrust-gatekeeper/gateway:dev
+    container_name: zt-gateway
+    depends_on:
+      auth-issuer:
+        condition: service_started
+      backend-echo:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    environment:
+      GATEWAY_ADDR: "0.0.0.0:8443"
+      GATEWAY_UPSTREAM_URL: http://backend-echo:8082
+      GATEWAY_AUTH_JWKS_URL: http://auth-issuer:8081/.well-known/jwks.json
+      GATEWAY_AUTH_ISSUER: zt-auth-issuer
+      GATEWAY_AUTH_AUDIENCE: zt-gateway
+      RUST_LOG: info
+    ports:
+      - "8443:8443"
+
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: zt-prometheus

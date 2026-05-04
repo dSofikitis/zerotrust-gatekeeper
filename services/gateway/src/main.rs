@@ -1,6 +1,6 @@
 //! zt-gateway entry point: load env config, init structured logging,
-//! build the axum router, and bind on either HTTP or mTLS depending
-//! on whether GATEWAY_TLS_* paths are set.
+//! build the JwksClient + axum router, and bind on either HTTP or
+//! mTLS depending on whether GATEWAY_TLS_* paths are set.
 
 use std::sync::Arc;
 
@@ -9,6 +9,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use tracing_subscriber::EnvFilter;
 
 use zt_gateway::config::Config;
+use zt_gateway::jwt::JwksClient;
 use zt_gateway::server::router;
 use zt_gateway::tls::build_server_config;
 use zt_gateway::GATEWAY_VERSION;
@@ -17,13 +18,36 @@ use zt_gateway::GATEWAY_VERSION;
 async fn main() -> Result<()> {
     init_logging();
     let cfg = Config::from_env();
-    let app = router();
+
+    let jwks: Option<Arc<JwksClient>> = match cfg.auth.as_ref() {
+        Some(auth) => {
+            let client = Arc::new(JwksClient::new(auth.issuer.clone(), auth.audience.clone()));
+            client.refresh_from_url(&auth.jwks_url).await?;
+            tracing::info!(
+                jwks_url = %auth.jwks_url,
+                issuer = %auth.issuer,
+                audience = %auth.audience,
+                "JWT validation enabled"
+            );
+            Some(client)
+        }
+        None => {
+            tracing::warn!(
+                "GATEWAY_AUTH_JWKS_URL not set — gateway is OPEN. \
+                 Suitable for local dev only."
+            );
+            None
+        }
+    };
+
+    let app = router(jwks);
 
     tracing::info!(
         version = GATEWAY_VERSION,
         addr = %cfg.addr,
         upstream = %cfg.upstream_url,
         tls = cfg.tls.is_some(),
+        auth = cfg.auth.is_some(),
         "zt-gateway starting"
     );
 
