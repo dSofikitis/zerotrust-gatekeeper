@@ -55,20 +55,28 @@ make demo              # walk through token issue, allowed call, denied call, ra
 
 ## Status (v0.1)
 
-The repo is being built phase by phase. CI matrix is green from
-commit 1; each service ships a passing stub. Implementation lands
-one phase per commit:
+The repo is built phase by phase. CI matrix runs Rust + Go + Rego
+in parallel on every push.
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Repo skeleton + CI matrix | ✅ |
-| 2 | Compose stack (Redis + OPA + Prometheus + Grafana) + cert generator | — |
-| 3 | `auth-issuer` (Go, JWKS) | — |
-| 4 | `gateway` scaffold (Rust, mTLS) | — |
-| 5 | JWT validation against JWKS | — |
-| 6 | OPA integration + audit log | — |
-| 7 | Rate limiting + sample Rego policies | — |
-| 8 | `backend-echo` + Terraform skeleton + dashboards + demo | — |
+| 1 | Repo skeleton + CI matrix + dependabot + CodeQL | ✅ |
+| 2 | Compose stack (Redis + OPA + Prometheus + Grafana) + cert generator | ✅ |
+| 3 | `auth-issuer` (Go, RS256 + JWKS, 10 tests) | ✅ |
+| 4 | `gateway` scaffold (Rust, axum + optional mTLS via rustls) | ✅ |
+| 5 | JWT validation against JWKS | ⏳ |
+| 6 | OPA integration + audit log | ⏳ |
+| 7a | Sample Rego policies (tenants / methods / geo, **14 tests**) | ✅ |
+| 7b | Rate limiting (token bucket, Redis-backed) | ⏳ |
+| 8a | `backend-echo` (Go, identity-stamp upstream) | ✅ |
+| 8b | `examples/` with curl flows + JWT payloads | ✅ |
+| 8c | Terraform skeleton (GCP Cloud Run) | ✅ |
+| 8d | End-to-end demo script | ✅ |
+| 8e | Grafana audit dashboard | ⏳ |
+
+Phases 5, 6, 7b layer middleware onto the existing axum router
+behind the same `Service`-shaped seams; the surrounding interfaces
+are already in place.
 
 ## Development
 
