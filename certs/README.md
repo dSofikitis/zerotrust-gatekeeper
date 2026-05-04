@@ -1,8 +1,7 @@
 # certs
 
 Holds **dev-only** mTLS materials for local Compose runs. Generated
-by `scripts/gen-certs.sh` (lands in phase 2) and gitignored — see
-`.gitignore`.
+by `scripts/gen-certs.sh` and gitignored — see `.gitignore`.
 
 | File | Purpose |
 |---|---|

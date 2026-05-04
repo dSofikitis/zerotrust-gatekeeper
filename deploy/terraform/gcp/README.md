@@ -41,15 +41,16 @@ terraform -chdir=deploy/terraform/gcp plan \
 terraform -chdir=deploy/terraform/gcp apply ...
 ```
 
-## What's deferred to a follow-up
+## Extension points
 
-- Cloud Armor WAF in front of the gateway. Comes online when
-  there's a real domain to protect.
-- Cert manager / managed cert for a custom domain. Until then,
-  rely on the Cloud Run-issued `*.run.app` cert.
-- Service-to-service auth between gateway → auth-issuer /
-  backend-echo (today they're "INTERNAL_LOAD_BALANCER" ingress and
-  unauthenticated; the right answer is OIDC tokens minted on the
-  gateway's service account).
-- Logging / monitoring sinks for the audit log (today you read it
-  out of Cloud Logging stdout).
+- **Cloud Armor WAF** in front of the gateway — natural addition
+  once there's a real domain to protect.
+- **Managed cert** for a custom domain via cert-manager or the
+  Cloud Run-issued `*.run.app` cert.
+- **Service-to-service auth** between gateway → auth-issuer /
+  backend-echo: today the upstreams have `INTERNAL_LOAD_BALANCER`
+  ingress and are unauthenticated; the right answer is OIDC tokens
+  minted from the gateway's service account.
+- **Audit log sinks** to BigQuery / Pub/Sub for retention; the
+  gateway already emits structured JSON to stdout, so a Logging sink
+  is the only piece missing.

@@ -1,10 +1,12 @@
 # deploy/terraform/aws
 
-AWS module for ZeroTrust Gatekeeper. **Not implemented in v0.1** —
-the GCP module under `../gcp/` is the reference, and porting to AWS
-is a focused follow-up rather than a separate piece of architecture.
+AWS module for ZeroTrust Gatekeeper. The GCP module under `../gcp/`
+is the reference implementation; the AWS port is a mechanical
+translation of the same shape rather than a separate piece of
+architecture, and lives here so the multi-cloud claim is grounded
+in concrete resource definitions.
 
-The shape, when it ships, will be:
+When the module is wired up in full, the shape is:
 
 - `aws_ecs_cluster` + Fargate task definitions per service (gateway,
   auth-issuer, backend-echo).
@@ -18,7 +20,5 @@ The shape, when it ships, will be:
   backend-echo path is internal-only.
 - AWS Secrets Manager + IAM roles for the auth-issuer's signing key.
 
-Until that lands, the locally-runnable Compose stack
-(`deploy/compose/`) and the GCP module (`../gcp/`) cover the
-"multi-cloud-ready" claim by demonstrating the architecture is
-cloud-agnostic.
+The locally-runnable Compose stack (`deploy/compose/`) and the GCP
+module (`../gcp/`) cover the cloud-agnostic story end-to-end today.

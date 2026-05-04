@@ -69,10 +69,10 @@ compose-logs:
 
 # ---------- demo ----------
 
-certs: ## generate dev mTLS certs into certs/ (lands in phase 2)
+certs: ## generate dev mTLS certs into certs/
 	bash scripts/gen-certs.sh
 
-demo: ## end-to-end walkthrough (lands in phase 8)
+demo: ## end-to-end walkthrough (token, allow, deny, rate-limit, audit)
 	bash scripts/demo.sh
 
 # ---------- clean ----------

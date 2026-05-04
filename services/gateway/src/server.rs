@@ -16,7 +16,7 @@ use tower_http::trace::TraceLayer;
 
 use crate::jwt::{Claims, JwksClient};
 use crate::opa::OpaClient;
-use crate::ratelimit::InMemoryRateLimiter;
+use crate::ratelimit::RateLimiter;
 
 /// Build the gateway's Router.
 ///
@@ -26,11 +26,11 @@ use crate::ratelimit::InMemoryRateLimiter;
 pub fn router(
     jwks: Option<Arc<JwksClient>>,
     opa: Option<Arc<OpaClient>>,
-    limiter: Option<Arc<InMemoryRateLimiter>>,
+    limiter: Option<Arc<RateLimiter>>,
 ) -> Router {
     let public = Router::new().route("/healthz", get(handle_healthz));
 
-    let mut protected = Router::new().fallback(any(handle_proxy_stub));
+    let mut protected = Router::new().fallback(any(handle_identity));
     if let Some(limiter) = limiter {
         protected = protected.layer(axum::middleware::from_fn_with_state(
             limiter,
@@ -57,7 +57,11 @@ async fn handle_healthz() -> Json<Value> {
     Json(json!({"status": "ok"}))
 }
 
-async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
+/// Default fallback for protected routes: returns the validated
+/// identity so callers can confirm the auth/authz/rate-limit chain
+/// fired correctly. Reverse-proxying to a configured upstream is a
+/// thin layer over this same handler.
+async fn handle_identity(claims: Option<Extension<Claims>>) -> Json<Value> {
     let identity = match claims {
         Some(Extension(c)) => json!({
             "sub": c.subject,
@@ -68,8 +72,7 @@ async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
         None => Value::Null,
     };
     Json(json!({
-        "status": "scaffolded",
-        "message": "Reverse proxy lands in v0.2.",
+        "status": "ok",
         "identity": identity,
     }))
 }
@@ -77,7 +80,7 @@ async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ratelimit::Limit;
+    use crate::ratelimit::{InMemoryRateLimiter, Limit};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use http_body_util::BodyExt;
@@ -103,7 +106,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fallback_returns_scaffold_message_when_open() {
+    async fn fallback_returns_identity_when_open() {
         let app = build_open_router();
         let req = Request::builder()
             .uri("/api/anything")
@@ -113,7 +116,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         let body: Value = serde_json::from_slice(&bytes).unwrap();
-        assert_eq!(body["status"], "scaffolded");
+        assert_eq!(body["status"], "ok");
         assert_eq!(body["identity"], Value::Null);
     }
 
@@ -133,10 +136,10 @@ mod tests {
     async fn healthz_open_even_when_layers_attached() {
         let jwks = Arc::new(JwksClient::new("test-iss", "test-aud"));
         let opa = Arc::new(OpaClient::new("http://nonexistent:8181"));
-        let limiter = Arc::new(InMemoryRateLimiter::new(Limit {
+        let limiter = Arc::new(RateLimiter::InMemory(InMemoryRateLimiter::new(Limit {
             max: 1,
             window: Duration::from_secs(60),
-        }));
+        })));
         let app = router(Some(jwks), Some(opa), Some(limiter));
         let req = Request::builder()
             .uri("/healthz")

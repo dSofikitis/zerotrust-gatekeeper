@@ -4,9 +4,9 @@
 #
 #   bash scripts/demo.sh
 #
-# Sections that depend on phases 5-7 (gateway middleware) are
-# clearly marked and skipped automatically when the gateway is
-# still on the scaffold version.
+# Walks token issuance, JWKS publication, direct OPA decisions,
+# upstream reachability, and the live gateway with JWT + OPA +
+# rate-limit middleware engaged.
 
 set -euo pipefail
 
@@ -92,21 +92,18 @@ echo
 
 # ---------- 6. Upstream sanity ----------
 
-step "6. Hit backend-echo directly (gateway middleware lands in phases 5-7)"
+step "6. Hit backend-echo directly (sanity check — bypasses the gateway)"
 bash "$HERE/examples/curl/call-echo-direct.sh"
 
-# ---------- 7. Gateway (skipped while still scaffold) ----------
+# ---------- 7. Gateway end-to-end ----------
 
-step "7. Gateway proxy"
+step "7. Gateway with JWT + OPA + rate-limit engaged"
 gw_ver="$(curl -fsS "$GATEWAY/healthz" 2>/dev/null || true)"
 if [[ "$gw_ver" == *'"status":"ok"'* ]]; then
-    echo "Gateway is up — running call-gateway examples"
     bash "$HERE/examples/curl/call-gateway.sh" GET /tenants/acme/users || true
     bash "$HERE/examples/curl/call-gateway.sh" POST /tenants/acme/users '{"new":"user"}' admin || true
 else
-    echo "Gateway not yet wired into Compose (or still on the phase-4 scaffold)."
-    echo "Once phases 5-7 land, this section will demonstrate JWT validation,"
-    echo "OPA decisions, and rate-limit enforcement in the live gateway."
+    echo "Gateway is not reachable at $GATEWAY — skipping this section."
 fi
 
 step "Demo complete. Tear down with: docker compose -f deploy/compose/docker-compose.yml down"

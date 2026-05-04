@@ -26,10 +26,10 @@ bash examples/curl/get-token.sh | bash examples/curl/decode-token.sh
 USER_FILE=admin bash examples/curl/get-token.sh \
   | bash examples/curl/decode-token.sh
 
-# Hit backend-echo directly (gateway middleware lands in phases 5-7)
+# Hit backend-echo directly (sanity check — bypasses the gateway)
 bash examples/curl/call-echo-direct.sh
 
-# Once the gateway is real:
+# Send a request through the gateway end-to-end
 bash examples/curl/call-gateway.sh GET /tenants/acme/users
 bash examples/curl/call-gateway.sh POST /tenants/acme/users '{"name":"x"}' admin
 ```
@@ -49,7 +49,7 @@ bash examples/curl/call-gateway.sh POST /tenants/acme/users '{"name":"x"}' admin
 | `get-token.sh` | POST to `auth-issuer/auth/token` with one of the `jwt/*.json` payloads (selected via `USER_FILE=...`); prints just the JWT to stdout. |
 | `decode-token.sh` | Stdin or `$1` JWT → prints the decoded payload. Useful for verifying the claim shape end-to-end. |
 | `call-gateway.sh` | Mint a token + send a request through the gateway. Returns the gateway's response and the HTTP status. |
-| `call-echo-direct.sh` | Hit backend-echo bypassing the gateway, with hand-stamped `X-Auth-*` headers — useful while gateway middleware is still under construction. |
+| `call-echo-direct.sh` | Hit backend-echo bypassing the gateway, with hand-stamped `X-Auth-*` headers — useful for confirming the upstream consumes the identity contract correctly. |
 
 All scripts honour env overrides (`AUTH=...`, `GATEWAY=...`,
 `ECHO=...`) for non-localhost targets.

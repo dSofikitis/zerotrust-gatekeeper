@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Hit backend-echo directly (bypassing the gateway) with hand-stamped
-# X-Auth-* headers — useful while the gateway middleware is being
-# wired up in phases 5-7. Once the gateway terminates mTLS and
-# stamps these headers itself, prefer call-gateway.sh.
+# X-Auth-* headers. Useful as a sanity check that the upstream
+# consumes the identity contract correctly; for the full enforcement
+# chain go through call-gateway.sh.
 #
 # Usage: bash examples/curl/call-echo-direct.sh
 
