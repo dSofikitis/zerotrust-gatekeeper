@@ -1,7 +1,9 @@
-//! zt-gateway entry point: load env config, init structured logging,
-//! build JwksClient + OpaClient + axum router, bind on HTTP or mTLS.
+//! zt-gateway entry point: load env config, init structured
+//! logging, build JwksClient + OpaClient + RateLimiter + axum
+//! router, bind on HTTP or mTLS.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use axum_server::tls_rustls::RustlsConfig;
@@ -10,6 +12,7 @@ use tracing_subscriber::EnvFilter;
 use zt_gateway::config::Config;
 use zt_gateway::jwt::JwksClient;
 use zt_gateway::opa::OpaClient;
+use zt_gateway::ratelimit::{InMemoryRateLimiter, Limit};
 use zt_gateway::server::router;
 use zt_gateway::tls::build_server_config;
 use zt_gateway::GATEWAY_VERSION;
@@ -51,7 +54,17 @@ async fn main() -> Result<()> {
         );
     }
 
-    let app = router(jwks, opa);
+    let limiter = Arc::new(InMemoryRateLimiter::new(Limit {
+        max: cfg.rate_limit.max,
+        window: Duration::from_secs(cfg.rate_limit.window_secs),
+    }));
+    tracing::info!(
+        max = cfg.rate_limit.max,
+        window_secs = cfg.rate_limit.window_secs,
+        "rate limit enabled (in-memory token bucket)"
+    );
+
+    let app = router(jwks, opa, Some(limiter));
 
     tracing::info!(
         version = GATEWAY_VERSION,

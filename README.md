@@ -64,19 +64,21 @@ in parallel on every push.
 | 2 | Compose stack (Redis + OPA + Prometheus + Grafana) + cert generator | ✅ |
 | 3 | `auth-issuer` (Go, RS256 + JWKS, 10 tests) | ✅ |
 | 4 | `gateway` scaffold (Rust, axum + optional mTLS via rustls) | ✅ |
-| 5 | JWT validation against JWKS | ⏳ |
-| 6 | OPA integration + audit log | ⏳ |
+| 5 | JWT validation against JWKS (**6 tests**) | ✅ |
+| 6 | OPA integration + audit log (**6 tests**) | ✅ |
 | 7a | Sample Rego policies (tenants / methods / geo, **14 tests**) | ✅ |
-| 7b | Rate limiting (token bucket, Redis-backed) | ⏳ |
+| 7b | Rate limiting (in-memory token bucket; Redis is a v0.2 swap) (**4 tests**) | ✅ |
 | 8a | `backend-echo` (Go, identity-stamp upstream) | ✅ |
 | 8b | `examples/` with curl flows + JWT payloads | ✅ |
 | 8c | Terraform skeleton (GCP Cloud Run) | ✅ |
 | 8d | End-to-end demo script | ✅ |
-| 8e | Grafana audit dashboard | ⏳ |
+| 8e | Grafana audit dashboard | ⏳ v0.2 |
 
-Phases 5, 6, 7b layer middleware onto the existing axum router
-behind the same `Service`-shaped seams; the surrounding interfaces
-are already in place.
+**Gateway middleware chain** (innermost first):
+`handler → rate_limit_layer → opa_layer → jwt_layer → TraceLayer`. Each
+layer is independently testable, and the order is enforced by the
+router builder so a misconfigured chain fails closed (e.g. opa_layer
+without jwt_layer upstream returns 500 instead of silently allowing).
 
 ## Development
 

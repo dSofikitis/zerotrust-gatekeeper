@@ -3,9 +3,9 @@
 //! Layer order on the protected route (innermost first, axum
 //! applies them outside-in):
 //!
-//!   handler -> opa_layer -> jwt_layer -> TraceLayer
+//!   handler -> rate_limit_layer -> opa_layer -> jwt_layer -> TraceLayer
 //!
-//! /healthz stays public and is unprotected by either auth layer.
+//! /healthz stays public and is unprotected by any auth/quota layer.
 
 use std::sync::Arc;
 
@@ -16,16 +16,27 @@ use tower_http::trace::TraceLayer;
 
 use crate::jwt::{Claims, JwksClient};
 use crate::opa::OpaClient;
+use crate::ratelimit::InMemoryRateLimiter;
 
 /// Build the gateway's Router.
 ///
-/// `jwks` and `opa` are independently optional; both `Some` is the
-/// real production shape. Either set to `None` to disable that
-/// stage in dev runs.
-pub fn router(jwks: Option<Arc<JwksClient>>, opa: Option<Arc<OpaClient>>) -> Router {
+/// `jwks`, `opa`, and `limiter` are independently optional; all
+/// `Some` is the production shape. Set any to `None` to disable
+/// that stage in dev runs.
+pub fn router(
+    jwks: Option<Arc<JwksClient>>,
+    opa: Option<Arc<OpaClient>>,
+    limiter: Option<Arc<InMemoryRateLimiter>>,
+) -> Router {
     let public = Router::new().route("/healthz", get(handle_healthz));
 
     let mut protected = Router::new().fallback(any(handle_proxy_stub));
+    if let Some(limiter) = limiter {
+        protected = protected.layer(axum::middleware::from_fn_with_state(
+            limiter,
+            crate::auth::rate_limit_layer,
+        ));
+    }
     if let Some(opa) = opa {
         protected = protected.layer(axum::middleware::from_fn_with_state(
             opa,
@@ -58,7 +69,7 @@ async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
     };
     Json(json!({
         "status": "scaffolded",
-        "message": "Rate limit + proxy land in phase 7.",
+        "message": "Reverse proxy lands in v0.2.",
         "identity": identity,
     }))
 }
@@ -66,13 +77,15 @@ async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ratelimit::Limit;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use http_body_util::BodyExt;
+    use std::time::Duration;
     use tower::ServiceExt;
 
     fn build_open_router() -> Router {
-        router(None, None)
+        router(None, None, None)
     }
 
     #[tokio::test]
@@ -107,7 +120,7 @@ mod tests {
     #[tokio::test]
     async fn fallback_rejects_missing_token_when_jwt_layer_attached() {
         let jwks = Arc::new(JwksClient::new("test-iss", "test-aud"));
-        let app = router(Some(jwks), None);
+        let app = router(Some(jwks), None, None);
         let req = Request::builder()
             .uri("/api/anything")
             .body(Body::empty())
@@ -120,7 +133,11 @@ mod tests {
     async fn healthz_open_even_when_layers_attached() {
         let jwks = Arc::new(JwksClient::new("test-iss", "test-aud"));
         let opa = Arc::new(OpaClient::new("http://nonexistent:8181"));
-        let app = router(Some(jwks), Some(opa));
+        let limiter = Arc::new(InMemoryRateLimiter::new(Limit {
+            max: 1,
+            window: Duration::from_secs(60),
+        }));
+        let app = router(Some(jwks), Some(opa), Some(limiter));
         let req = Request::builder()
             .uri("/healthz")
             .body(Body::empty())

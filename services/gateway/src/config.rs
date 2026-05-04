@@ -12,6 +12,7 @@ pub struct Config {
     pub tls: Option<TlsConfig>,
     pub auth: Option<AuthConfig>,
     pub opa_url: Option<String>,
+    pub rate_limit: RateLimitConfig,
     pub upstream_url: String,
 }
 
@@ -33,6 +34,23 @@ pub struct AuthConfig {
     pub jwks_url: String,
     pub issuer: String,
     pub audience: String,
+}
+
+/// Rate-limit budget per `<tenant>:<method>:<path-segment>` key.
+/// Defaults: 100 requests per 60s window.
+#[derive(Debug, Clone, Copy)]
+pub struct RateLimitConfig {
+    pub max: u32,
+    pub window_secs: u64,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            max: 100,
+            window_secs: 60,
+        }
+    }
 }
 
 impl Config {
@@ -68,6 +86,17 @@ impl Config {
 
         let opa_url = env::var("GATEWAY_OPA_URL").ok();
 
+        let rate_limit = RateLimitConfig {
+            max: env::var("GATEWAY_RATE_LIMIT_MAX")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(RateLimitConfig::default().max),
+            window_secs: env::var("GATEWAY_RATE_LIMIT_WINDOW_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(RateLimitConfig::default().window_secs),
+        };
+
         let upstream_url = env::var("GATEWAY_UPSTREAM_URL")
             .unwrap_or_else(|_| "http://backend-echo:8082".to_string());
 
@@ -76,6 +105,7 @@ impl Config {
             tls,
             auth,
             opa_url,
+            rate_limit,
             upstream_url,
         }
     }
