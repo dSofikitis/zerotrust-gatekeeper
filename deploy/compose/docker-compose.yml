@@ -34,6 +34,17 @@ services:
       timeout: 5s
       retries: 30
 
+  auth-issuer:
+    build:
+      context: ../../services/auth-issuer
+    image: zerotrust-gatekeeper/auth-issuer:dev
+    container_name: zt-auth-issuer
+    environment:
+      AUTH_ADDR: ":8081"
+      AUTH_TOKEN_TTL: "15m"
+    ports:
+      - "8081:8081"
+
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: zt-prometheus
