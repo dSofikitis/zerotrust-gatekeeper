@@ -73,6 +73,7 @@ services:
       GATEWAY_AUTH_JWKS_URL: http://auth-issuer:8081/.well-known/jwks.json
       GATEWAY_AUTH_ISSUER: zt-auth-issuer
       GATEWAY_AUTH_AUDIENCE: zt-gateway
+      GATEWAY_OPA_URL: http://opa:8181
       RUST_LOG: info
     ports:
       - "8443:8443"

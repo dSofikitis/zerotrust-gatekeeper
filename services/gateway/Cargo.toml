@@ -1,6 +1,6 @@
 [package]
 name = "zt-gateway"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "ZeroTrust Gatekeeper — policy-as-code API gateway."
 license = "MIT"
@@ -34,3 +34,4 @@ base64 = "0.22"
 http-body-util = "0.1"
 rand = "0.8"
 rsa = "0.9"
+wiremock = "0.6"

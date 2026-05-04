@@ -3,14 +3,15 @@
 use std::env;
 use std::net::SocketAddr;
 
-/// Top-level runtime config. TLS and Auth are both optional so the
-/// gateway can run in dev mode without certs and without a real IdP;
-/// in any real deployment both must be set.
+/// Top-level runtime config. TLS, Auth, and OPA are all optional so
+/// the gateway can run in dev mode without certs / IdP / policy
+/// engine; in any real deployment all three must be set.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub addr: SocketAddr,
     pub tls: Option<TlsConfig>,
     pub auth: Option<AuthConfig>,
+    pub opa_url: Option<String>,
     pub upstream_url: String,
 }
 
@@ -65,6 +66,8 @@ impl Config {
                     .unwrap_or_else(|_| "zt-gateway".to_string()),
             });
 
+        let opa_url = env::var("GATEWAY_OPA_URL").ok();
+
         let upstream_url = env::var("GATEWAY_UPSTREAM_URL")
             .unwrap_or_else(|_| "http://backend-echo:8082".to_string());
 
@@ -72,6 +75,7 @@ impl Config {
             addr,
             tls,
             auth,
+            opa_url,
             upstream_url,
         }
     }

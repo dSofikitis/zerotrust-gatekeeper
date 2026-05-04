@@ -1,9 +1,11 @@
 //! axum router for zt-gateway.
 //!
-//! Phase 5 wires the [`auth`](crate::auth) middleware in front of
-//! the catch-all route so any request to a non-`/healthz` path must
-//! carry a verifiable JWT. OPA authorization (phase 6), audit
-//! logging (phase 6), and rate limiting (phase 7) layer on top.
+//! Layer order on the protected route (innermost first, axum
+//! applies them outside-in):
+//!
+//!   handler -> opa_layer -> jwt_layer -> TraceLayer
+//!
+//! /healthz stays public and is unprotected by either auth layer.
 
 use std::sync::Arc;
 
@@ -13,16 +15,23 @@ use serde_json::{json, Value};
 use tower_http::trace::TraceLayer;
 
 use crate::jwt::{Claims, JwksClient};
+use crate::opa::OpaClient;
 
 /// Build the gateway's Router.
 ///
-/// When `jwks` is `Some`, the catch-all route is gated by the JWT
-/// middleware. When `None`, the router is open — useful only for
-/// dev runs that don't need a real auth-issuer.
-pub fn router(jwks: Option<Arc<JwksClient>>) -> Router {
+/// `jwks` and `opa` are independently optional; both `Some` is the
+/// real production shape. Either set to `None` to disable that
+/// stage in dev runs.
+pub fn router(jwks: Option<Arc<JwksClient>>, opa: Option<Arc<OpaClient>>) -> Router {
     let public = Router::new().route("/healthz", get(handle_healthz));
 
     let mut protected = Router::new().fallback(any(handle_proxy_stub));
+    if let Some(opa) = opa {
+        protected = protected.layer(axum::middleware::from_fn_with_state(
+            opa,
+            crate::auth::opa_layer,
+        ));
+    }
     if let Some(jwks) = jwks {
         protected = protected.layer(axum::middleware::from_fn_with_state(
             jwks,
@@ -49,7 +58,7 @@ async fn handle_proxy_stub(claims: Option<Extension<Claims>>) -> Json<Value> {
     };
     Json(json!({
         "status": "scaffolded",
-        "message": "OPA authz + rate limit + proxy land in phases 6-7.",
+        "message": "Rate limit + proxy land in phase 7.",
         "identity": identity,
     }))
 }
@@ -63,7 +72,7 @@ mod tests {
     use tower::ServiceExt;
 
     fn build_open_router() -> Router {
-        router(None)
+        router(None, None)
     }
 
     #[tokio::test]
@@ -98,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn fallback_rejects_missing_token_when_jwt_layer_attached() {
         let jwks = Arc::new(JwksClient::new("test-iss", "test-aud"));
-        let app = router(Some(jwks));
+        let app = router(Some(jwks), None);
         let req = Request::builder()
             .uri("/api/anything")
             .body(Body::empty())
@@ -108,9 +117,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn healthz_open_even_when_jwt_layer_attached() {
+    async fn healthz_open_even_when_layers_attached() {
         let jwks = Arc::new(JwksClient::new("test-iss", "test-aud"));
-        let app = router(Some(jwks));
+        let opa = Arc::new(OpaClient::new("http://nonexistent:8181"));
+        let app = router(Some(jwks), Some(opa));
         let req = Request::builder()
             .uri("/healthz")
             .body(Body::empty())

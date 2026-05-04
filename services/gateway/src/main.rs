@@ -1,6 +1,5 @@
 //! zt-gateway entry point: load env config, init structured logging,
-//! build the JwksClient + axum router, and bind on either HTTP or
-//! mTLS depending on whether GATEWAY_TLS_* paths are set.
+//! build JwksClient + OpaClient + axum router, bind on HTTP or mTLS.
 
 use std::sync::Arc;
 
@@ -10,6 +9,7 @@ use tracing_subscriber::EnvFilter;
 
 use zt_gateway::config::Config;
 use zt_gateway::jwt::JwksClient;
+use zt_gateway::opa::OpaClient;
 use zt_gateway::server::router;
 use zt_gateway::tls::build_server_config;
 use zt_gateway::GATEWAY_VERSION;
@@ -33,14 +33,25 @@ async fn main() -> Result<()> {
         }
         None => {
             tracing::warn!(
-                "GATEWAY_AUTH_JWKS_URL not set — gateway is OPEN. \
+                "GATEWAY_AUTH_JWKS_URL not set — JWT validation OFF. \
                  Suitable for local dev only."
             );
             None
         }
     };
 
-    let app = router(jwks);
+    let opa: Option<Arc<OpaClient>> = cfg.opa_url.as_ref().map(|url| {
+        tracing::info!(opa_url = %url, "OPA authorization enabled");
+        Arc::new(OpaClient::new(url.clone()))
+    });
+    if opa.is_none() {
+        tracing::warn!(
+            "GATEWAY_OPA_URL not set — OPA authorization OFF. \
+             Suitable for local dev only."
+        );
+    }
+
+    let app = router(jwks, opa);
 
     tracing::info!(
         version = GATEWAY_VERSION,
@@ -48,11 +59,11 @@ async fn main() -> Result<()> {
         upstream = %cfg.upstream_url,
         tls = cfg.tls.is_some(),
         auth = cfg.auth.is_some(),
+        opa = cfg.opa_url.is_some(),
         "zt-gateway starting"
     );
 
     if let Some(tls) = &cfg.tls {
-        // Install the rustls default CryptoProvider once per process.
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let server_cfg = build_server_config(tls)?;
         let rustls_cfg = RustlsConfig::from_config(Arc::new(server_cfg));

@@ -4,12 +4,14 @@
 //! - [`config`] — runtime knobs from env.
 //! - [`tls`]    — rustls server config builder for mTLS.
 //! - [`jwt`]    — JWKS-backed JWT validator.
-//! - [`auth`]   — tower middleware that wraps [`jwt`] for axum.
+//! - [`opa`]    — OPA HTTP client + the policy input contract.
+//! - [`auth`]   — tower middleware wrapping `jwt` + `opa` for axum.
 //! - [`server`] — axum [`Router`](axum::Router) builder.
 
 pub mod auth;
 pub mod config;
 pub mod jwt;
+pub mod opa;
 pub mod server;
 pub mod tls;
 
