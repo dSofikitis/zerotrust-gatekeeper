@@ -11,8 +11,9 @@ use tracing_subscriber::EnvFilter;
 
 use zt_gateway::config::Config;
 use zt_gateway::jwt::JwksClient;
+use zt_gateway::metrics::{install_recorder, serve as serve_metrics};
 use zt_gateway::opa::OpaClient;
-use zt_gateway::ratelimit::{InMemoryRateLimiter, Limit};
+use zt_gateway::ratelimit::{InMemoryRateLimiter, Limit, RateLimiter, RedisRateLimiter};
 use zt_gateway::server::router;
 use zt_gateway::tls::build_server_config;
 use zt_gateway::GATEWAY_VERSION;
@@ -54,25 +55,58 @@ async fn main() -> Result<()> {
         );
     }
 
-    let limiter = Arc::new(InMemoryRateLimiter::new(Limit {
+    let limit = Limit {
         max: cfg.rate_limit.max,
         window: Duration::from_secs(cfg.rate_limit.window_secs),
-    }));
-    tracing::info!(
-        max = cfg.rate_limit.max,
-        window_secs = cfg.rate_limit.window_secs,
-        "rate limit enabled (in-memory token bucket)"
-    );
+    };
+    let limiter = match cfg.redis_url.as_deref() {
+        Some(url) => match RedisRateLimiter::connect(url, limit).await {
+            Ok(rl) => {
+                tracing::info!(
+                    redis_url = %url,
+                    max = cfg.rate_limit.max,
+                    window_secs = cfg.rate_limit.window_secs,
+                    "rate limit enabled (Redis-backed)"
+                );
+                Arc::new(RateLimiter::Redis(rl))
+            }
+            Err(err) => {
+                tracing::warn!(
+                    error = %err,
+                    redis_url = %url,
+                    "Redis connect failed; falling back to in-memory rate limiter"
+                );
+                Arc::new(RateLimiter::InMemory(InMemoryRateLimiter::new(limit)))
+            }
+        },
+        None => {
+            tracing::info!(
+                max = cfg.rate_limit.max,
+                window_secs = cfg.rate_limit.window_secs,
+                "rate limit enabled (in-memory)"
+            );
+            Arc::new(RateLimiter::InMemory(InMemoryRateLimiter::new(limit)))
+        }
+    };
+
+    let metrics_handle = install_recorder()?;
+    tokio::spawn(async move {
+        if let Err(err) = serve_metrics(cfg.metrics_addr, metrics_handle).await {
+            tracing::error!(error = %err, "metrics endpoint exited");
+        }
+    });
 
     let app = router(jwks, opa, Some(limiter));
 
     tracing::info!(
         version = GATEWAY_VERSION,
         addr = %cfg.addr,
+        metrics_addr = %cfg.metrics_addr,
         upstream = %cfg.upstream_url,
         tls = cfg.tls.is_some(),
         auth = cfg.auth.is_some(),
         opa = cfg.opa_url.is_some(),
+        redis = cfg.redis_url.is_some(),
         "zt-gateway starting"
     );
 

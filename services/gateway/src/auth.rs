@@ -25,8 +25,11 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 use crate::jwt::{Claims, JwksClient};
+use crate::metrics::{
+    record_decision, DECISION_ALLOW, DECISION_AUTH_FAILED, DECISION_DENY, DECISION_RATE_LIMITED,
+};
 use crate::opa::{input_from, OpaClient};
-use crate::ratelimit::InMemoryRateLimiter;
+use crate::ratelimit::RateLimiter;
 
 /// JWT validation. Use as `axum::middleware::from_fn_with_state(jwks, jwt_layer)`.
 pub async fn jwt_layer(
@@ -41,7 +44,10 @@ pub async fn jwt_layer(
         .and_then(|s| s.strip_prefix("Bearer "))
     {
         Some(t) => t.to_string(),
-        None => return reject(StatusCode::UNAUTHORIZED, "missing bearer token"),
+        None => {
+            record_decision(DECISION_AUTH_FAILED, "unknown");
+            return reject(StatusCode::UNAUTHORIZED, "missing bearer token");
+        }
     };
     match jwks.validate(&token).await {
         Ok(claims) => {
@@ -50,6 +56,7 @@ pub async fn jwt_layer(
         }
         Err(err) => {
             tracing::debug!(error = %err, "jwt validation failed");
+            record_decision(DECISION_AUTH_FAILED, "unknown");
             reject(StatusCode::UNAUTHORIZED, "invalid token")
         }
     }
@@ -96,6 +103,7 @@ pub async fn opa_layer(
             tenant = %claims.tenant,
             "request denied"
         );
+        record_decision(DECISION_DENY, &claims.tenant);
         return (
             StatusCode::FORBIDDEN,
             axum::Json(serde_json::json!({
@@ -115,6 +123,7 @@ pub async fn opa_layer(
         tenant = %claims.tenant,
         "request allowed"
     );
+    record_decision(DECISION_ALLOW, &claims.tenant);
     next.run(req).await
 }
 
@@ -123,7 +132,7 @@ pub async fn opa_layer(
 /// so authenticated, authorized requests are the only ones that
 /// consume budget.
 pub async fn rate_limit_layer(
-    State(limiter): State<Arc<InMemoryRateLimiter>>,
+    State(limiter): State<Arc<RateLimiter>>,
     req: Request<Body>,
     next: Next,
 ) -> Response {
@@ -169,6 +178,7 @@ pub async fn rate_limit_layer(
                 retry_after_secs = retry_after,
                 "rate limit exceeded"
             );
+            record_decision(DECISION_RATE_LIMITED, &claims.tenant);
             let mut response = (
                 StatusCode::TOO_MANY_REQUESTS,
                 axum::Json(serde_json::json!({

@@ -5,7 +5,9 @@
 //! - [`tls`]       — rustls server config builder for mTLS.
 //! - [`jwt`]       — JWKS-backed JWT validator.
 //! - [`opa`]       — OPA HTTP client + the policy input contract.
-//! - [`ratelimit`] — per-tenant token-bucket (in-memory in v0.1).
+//! - [`ratelimit`] — per-tenant fixed-window counter (in-memory by
+//!   default; Redis-backed when `GATEWAY_REDIS_URL` is set).
+//! - [`metrics`]   — Prometheus recorder + `/metrics` endpoint.
 //! - [`auth`]      — tower middleware tying jwt + opa + ratelimit
 //!   into an axum-friendly chain.
 //! - [`server`]    — axum [`Router`](axum::Router) builder.
@@ -13,6 +15,7 @@
 pub mod auth;
 pub mod config;
 pub mod jwt;
+pub mod metrics;
 pub mod opa;
 pub mod ratelimit;
 pub mod server;

@@ -74,9 +74,12 @@ services:
       GATEWAY_AUTH_ISSUER: zt-auth-issuer
       GATEWAY_AUTH_AUDIENCE: zt-gateway
       GATEWAY_OPA_URL: http://opa:8181
+      GATEWAY_REDIS_URL: redis://redis:6379
+      GATEWAY_METRICS_ADDR: "0.0.0.0:9100"
       RUST_LOG: info
     ports:
       - "8443:8443"
+      - "9100:9100"
 
   prometheus:
     image: prom/prometheus:v2.55.1

@@ -9,8 +9,7 @@ sequenceDiagram
     participant GW as Gateway (Rust)
     participant Auth as auth-issuer (Go)
     participant OPA
-    participant Redis
-    participant Up as backend-echo (Go)
+    participant RL as RateLimiter
 
     Note over Client,Auth: ahead of time
     Client->>Auth: POST /auth/token (creds)
@@ -26,16 +25,22 @@ sequenceDiagram
     alt allow == false
         GW-->>Client: 403 Forbidden (audit)
     else allow == true
-        GW->>Redis: 5. token-bucket take(tenant, route)
+        GW->>RL: 5. token-bucket take(tenant, route)
         alt rate limit exceeded
             GW-->>Client: 429 Too Many Requests (audit)
         else within budget
-            GW->>Up: 6. forward request, stamp X-Auth-Identity
-            Up-->>GW: response
-            GW-->>Client: response (audit)
+            GW-->>Client: 200 + validated identity (audit)
         end
     end
 ```
+
+The gateway is a **policy enforcement endpoint**: every protected
+route runs the full mTLS → JWT → OPA → rate-limit chain and, on
+success, returns the validated identity. The companion
+[`backend-echo`](services/backend-echo) service shows the
+downstream pattern — it consumes `X-Auth-*` headers and echoes them
+back, demonstrating how a real upstream would receive the stamped
+identity once the gateway is fronting it.
 
 ## Policy input contract
 
@@ -67,7 +72,7 @@ default allow := false
 allow if { ... }
 ```
 
-Three sample rules ship in v0.1:
+Three sample rules ship under `policies/`:
 - `tenants.rego` — a request can only touch resources belonging to
   the JWT's tenant claim.
 - `methods.rego` — `GET` allowed for any valid identity; `POST` /
@@ -77,9 +82,18 @@ Three sample rules ship in v0.1:
 
 ## Rate limiting
 
-Per `(tenant, route)` token-bucket with Redis backing for horizontal
-scaling. Default: **100 req/min**, burst **20**. Both come from
-config; per-route overrides land via Rego policy data later.
+Per `(tenant, route)` fixed-window counter. The `RateLimiter` enum
+dispatches to one of two backends, picked at startup from env:
+
+- `InMemoryRateLimiter` — single-process counter; default when
+  `GATEWAY_REDIS_URL` is unset.
+- `RedisRateLimiter` — atomic `INCR` + `EXPIRE` against a shared
+  Redis. Fails open on connection errors so a flaky cache can't
+  take the data plane down.
+
+Default budget: **100 req/min** per key. Both backends expose the
+same `check(key) -> Result<remaining, retry_after_secs>` signature
+so the middleware doesn't know which one is wired.
 
 ## mTLS
 
@@ -124,10 +138,16 @@ for ops review.
 - **Rego** for policies. The whole point of this repo is to keep
   authorization out of code; Rego is the open standard.
 
-## Out of scope (v0.1)
+## Design choices and extension points
 
-- Real cloud `terraform apply` — modules ship as a skeleton; running
-  them needs credentials this repo deliberately doesn't carry.
-- WebAuthn / SAML / SSO — out of scope for "gateway" framing.
-- Service-mesh integration (Envoy filter, Istio AuthorizationPolicy
-  generation from the same Rego). Worth a follow-up.
+- **Terraform without `apply`.** The IaC modules ship as runnable
+  skeletons. Standing up real infrastructure needs cloud credentials
+  that this repo deliberately doesn't carry; the modules are still
+  the contract for what the deploy looks like.
+- **No WebAuthn / SAML / SSO.** The gateway is a JWT consumer, not
+  an identity provider; user-facing federation belongs upstream of
+  `auth-issuer`.
+- **No service-mesh integration today.** The same Rego policies could
+  be served to an Envoy filter or compiled to an Istio
+  AuthorizationPolicy — both reuse the existing `policies/` tree
+  unchanged.

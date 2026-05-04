@@ -9,10 +9,12 @@ use std::net::SocketAddr;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub addr: SocketAddr,
+    pub metrics_addr: SocketAddr,
     pub tls: Option<TlsConfig>,
     pub auth: Option<AuthConfig>,
     pub opa_url: Option<String>,
     pub rate_limit: RateLimitConfig,
+    pub redis_url: Option<String>,
     pub upstream_url: String,
 }
 
@@ -61,6 +63,12 @@ impl Config {
             .parse()
             .unwrap_or_else(|_| panic!("GATEWAY_ADDR={addr_raw:?} is not a valid socket address"));
 
+        let metrics_addr_raw =
+            env::var("GATEWAY_METRICS_ADDR").unwrap_or_else(|_| "0.0.0.0:9100".to_string());
+        let metrics_addr: SocketAddr = metrics_addr_raw.parse().unwrap_or_else(|_| {
+            panic!("GATEWAY_METRICS_ADDR={metrics_addr_raw:?} is not a valid socket address")
+        });
+
         let tls = match (
             env::var("GATEWAY_TLS_SERVER_CERT").ok(),
             env::var("GATEWAY_TLS_SERVER_KEY").ok(),
@@ -97,15 +105,19 @@ impl Config {
                 .unwrap_or(RateLimitConfig::default().window_secs),
         };
 
+        let redis_url = env::var("GATEWAY_REDIS_URL").ok();
+
         let upstream_url = env::var("GATEWAY_UPSTREAM_URL")
             .unwrap_or_else(|_| "http://backend-echo:8082".to_string());
 
         Self {
             addr,
+            metrics_addr,
             tls,
             auth,
             opa_url,
             rate_limit,
+            redis_url,
             upstream_url,
         }
     }

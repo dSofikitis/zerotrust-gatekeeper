@@ -21,10 +21,10 @@ Kong, Tyk, AWS API Gateway + Lambda authorizers) are composed.
 | **Mutual TLS at the edge** | Gateway's TLS config requires + validates client certs against a trust bundle. Cert generator script for local dev. |
 | **JWT validation** | Gateway fetches the issuer's JWKS, verifies signatures, extracts claims into request extensions for downstream layers. |
 | **Policy as code** | OPA / Rego sidecar (`policies/*.rego`) — tenant scoping, RBAC, geo-blocking. Gateway calls `POST /v1/data/zt/authz/allow` per request. |
-| **Rate limiting** | Token bucket per `(tenant, route)` with Redis backing for horizontal scale. |
-| **Audit + observability** | Structured JSON audit log per request, Prometheus metrics (request count, latency, allow/deny ratio, rate-limit hits), Grafana dashboards. |
-| **IaC** | Terraform skeleton for GCP (Cloud Run) and AWS (Fargate). |
-| **Polyglot monorepo** | Rust for the gateway (perf + memory safety on the hot path), Go for the IdP and the protected upstream. |
+| **Rate limiting** | Fixed-window counter per `(tenant, route)` behind a `RateLimiter` enum — in-memory by default, Redis-backed (atomic `INCR` + `EXPIRE`, fail-open) when `GATEWAY_REDIS_URL` is set. |
+| **Audit + observability** | Structured JSON audit log per request, Prometheus metrics (request count, latency, allow/deny ratio, rate-limit hits), Grafana provisioned alongside. |
+| **IaC** | Runnable Terraform module skeletons for GCP (Cloud Run) and AWS (Fargate). |
+| **Polyglot monorepo** | Rust for the gateway (perf + memory safety on the hot path), Go for the IdP and the sample protected service. |
 
 ## Architecture at a glance
 
@@ -34,13 +34,18 @@ Kong, Tyk, AWS API Gateway + Lambda authorizers) are composed.
                                   └───────┬────────┘
                                           │ JWT
                                           ▼
-client (mTLS) ──► gateway (Rust) ──► [JWT verify] ──► [OPA authz] ──► [rate limit]
-                       │                                                   │
-                       │ deny                                              │ allow
-                       │                                                   ▼
-                       ▼                                           backend-echo (Go)
+client (mTLS) ──► gateway (Rust) ──► [JWT verify] ──► [OPA authz] ──► [rate limit] ──► 200 + identity
+                       │
+                       │ deny
+                       ▼
                  audit log
                  + metrics
+
+           backend-echo (Go) — sample downstream that consumes
+                                X-Auth-* headers and echoes them
+                                back; demonstrates the upstream
+                                contract for a real protected
+                                service.
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the data flow per request,
@@ -53,32 +58,16 @@ make compose-up        # gateway + auth-issuer + backend-echo + opa + redis + pr
 make demo              # walk through token issue, allowed call, denied call, rate-limit hit
 ```
 
-## Status (v0.1)
+## Gateway middleware chain
 
-The repo is built phase by phase. CI matrix runs Rust + Go + Rego
-in parallel on every push.
-
-| Phase | What | Status |
-|---|---|---|
-| 1 | Repo skeleton + CI matrix + dependabot + CodeQL | ✅ |
-| 2 | Compose stack (Redis + OPA + Prometheus + Grafana) + cert generator | ✅ |
-| 3 | `auth-issuer` (Go, RS256 + JWKS, 10 tests) | ✅ |
-| 4 | `gateway` scaffold (Rust, axum + optional mTLS via rustls) | ✅ |
-| 5 | JWT validation against JWKS (**6 tests**) | ✅ |
-| 6 | OPA integration + audit log (**6 tests**) | ✅ |
-| 7a | Sample Rego policies (tenants / methods / geo, **14 tests**) | ✅ |
-| 7b | Rate limiting (in-memory token bucket; Redis is a v0.2 swap) (**4 tests**) | ✅ |
-| 8a | `backend-echo` (Go, identity-stamp upstream) | ✅ |
-| 8b | `examples/` with curl flows + JWT payloads | ✅ |
-| 8c | Terraform skeleton (GCP Cloud Run) | ✅ |
-| 8d | End-to-end demo script | ✅ |
-| 8e | Grafana audit dashboard | ⏳ v0.2 |
-
-**Gateway middleware chain** (innermost first):
+Innermost first:
 `handler → rate_limit_layer → opa_layer → jwt_layer → TraceLayer`. Each
 layer is independently testable, and the order is enforced by the
-router builder so a misconfigured chain fails closed (e.g. opa_layer
-without jwt_layer upstream returns 500 instead of silently allowing).
+router builder so a misconfigured chain fails closed (e.g. `opa_layer`
+without `jwt_layer` upstream returns 500 instead of silently allowing).
+
+CI runs the full Rust + Go + Rego matrix (build + lint + tests) in
+parallel on every push to `main` and every PR.
 
 ## Development
 

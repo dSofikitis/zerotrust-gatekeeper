@@ -1,0 +1,279 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum(increase(zt_gateway_decisions_total{decision=\"allow\"}[1h]))",
+          "legendFormat": "allowed",
+          "refId": "A"
+        }
+      ],
+      "title": "Allowed (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum(increase(zt_gateway_decisions_total{decision=\"deny\"}[1h]))",
+          "legendFormat": "denied",
+          "refId": "A"
+        }
+      ],
+      "title": "Denied by OPA (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum(increase(zt_gateway_decisions_total{decision=\"auth_failed\"}[1h]))",
+          "legendFormat": "auth failures",
+          "refId": "A"
+        }
+      ],
+      "title": "Auth Failures (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["sum"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum(increase(zt_gateway_decisions_total{decision=\"rate_limited\"}[1h]))",
+          "legendFormat": "rate-limited",
+          "refId": "A"
+        }
+      ],
+      "title": "Rate-Limited (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "decisions/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "none",
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": { "type": "linear" },
+            "showPoints": "auto",
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 4 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum by (decision) (rate(zt_gateway_decisions_total[1m])) * 60",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Decisions per minute, by outcome",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "decisions/min",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 13 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum by (tenant) (rate(zt_gateway_decisions_total{decision=\"allow\"}[1m])) * 60",
+          "legendFormat": "{{tenant}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Allowed per minute, by tenant",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "denials/min",
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "lineWidth": 1,
+            "stacking": { "group": "A", "mode": "normal" }
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 13 },
+      "id": 7,
+      "options": {
+        "legend": { "calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "none" }
+      },
+      "pluginVersion": "11.2.0",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "zt-prometheus" },
+          "expr": "sum by (decision) (rate(zt_gateway_decisions_total{decision=~\"deny|auth_failed|rate_limited\"}[1m])) * 60",
+          "legendFormat": "{{decision}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Refusals per minute, by category",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["zerotrust", "audit"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "",
+  "title": "ZeroTrust — Audit",
+  "uid": "zt-audit",
+  "version": 1,
+  "weekStart": ""
+}

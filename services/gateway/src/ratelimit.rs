@@ -1,16 +1,24 @@
 //! Per-tenant fixed-window rate limiter.
 //!
-//! v0.1 ships an [`InMemoryRateLimiter`] keyed by
-//! `<tenant>:<method>:<path-segment>`. The Redis-backed equivalent
-//! slots in behind the same shape in v0.2 — both algorithms expose
-//! [`check`](InMemoryRateLimiter::check), which atomically
-//! increments the counter and either returns the remaining budget
-//! or refuses with `Retry-After`-suitable seconds.
+//! Two backends behind a single [`RateLimiter`] dispatch enum:
+//!
+//! - [`InMemoryRateLimiter`] — single-process counter keyed by
+//!   `<tenant>:<method>:<path-segment>`. Fine for the default deploy
+//!   and dev runs.
+//! - [`RedisRateLimiter`] — atomic `INCR` + `EXPIRE` against a
+//!   shared Redis. Use when the gateway runs as more than one
+//!   replica so the counter is consistent across them.
+//!
+//! Both expose `check(key)`, which either returns the remaining
+//! budget or refuses with `Retry-After`-suitable seconds. The Redis
+//! backend fails *open* on connection errors — a flaky cache must
+//! not take the gateway down with it.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use redis::aio::ConnectionManager;
 use tokio::sync::Mutex;
 
 /// Static per-key budget. Defaults are tuned for the demo: 100
@@ -33,15 +41,32 @@ impl Default for Limit {
     }
 }
 
+/// Backend-agnostic rate-limit handle. The middleware holds an
+/// `Arc<RateLimiter>` and never sees which backend is wired.
+pub enum RateLimiter {
+    InMemory(InMemoryRateLimiter),
+    Redis(RedisRateLimiter),
+}
+
+impl RateLimiter {
+    /// Returns `Ok(remaining)` on success, `Err(retry_after_secs)` when
+    /// the key is at budget. See backend-specific docs for failure
+    /// semantics.
+    pub async fn check(&self, key: &str) -> Result<u32, u64> {
+        match self {
+            Self::InMemory(l) => l.check(key).await,
+            Self::Redis(l) => l.check(key).await,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Bucket {
     count: u32,
     expires_at: Instant,
 }
 
-/// In-memory fixed-window counter. Single-process — fine for a v0.1
-/// demo, the production path swaps in Redis with the same `check`
-/// signature so the middleware doesn't change.
+/// In-memory fixed-window counter.
 pub struct InMemoryRateLimiter {
     buckets: Arc<Mutex<HashMap<String, Bucket>>>,
     limit: Limit,
@@ -83,6 +108,66 @@ impl InMemoryRateLimiter {
         }
         entry.count += 1;
         Ok(self.limit.max - entry.count)
+    }
+}
+
+/// Redis-backed fixed-window counter. Each `check` runs an atomic
+/// `INCR` + `TTL` pipeline; the first request of a new window also
+/// sets `EXPIRE window_secs`. Connection failures *fail open* (the
+/// request is allowed and a warning is logged) so a transient Redis
+/// outage doesn't take the data plane down.
+pub struct RedisRateLimiter {
+    conn: ConnectionManager,
+    limit: Limit,
+}
+
+impl RedisRateLimiter {
+    /// Connect to Redis and resolve the connection manager. The
+    /// returned limiter is `Send + Sync` and cheap to clone the
+    /// underlying connection on each call.
+    pub async fn connect(url: &str, limit: Limit) -> anyhow::Result<Self> {
+        let client = redis::Client::open(url)?;
+        let conn = ConnectionManager::new(client).await?;
+        Ok(Self { conn, limit })
+    }
+
+    pub async fn check(&self, key: &str) -> Result<u32, u64> {
+        let mut conn = self.conn.clone();
+        let prefixed = format!("zt:rl:{key}");
+        let window_secs = self.limit.window.as_secs() as i64;
+
+        let pipe_result: redis::RedisResult<(u64, i64)> = redis::pipe()
+            .atomic()
+            .incr(&prefixed, 1u64)
+            .ttl(&prefixed)
+            .query_async(&mut conn)
+            .await;
+
+        let (count, ttl) = match pipe_result {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(
+                    error = %e,
+                    "redis rate limiter unavailable; allowing request (fail-open)"
+                );
+                return Ok(self.limit.max);
+            }
+        };
+
+        if ttl < 0 {
+            // First request in this window — set the expiry.
+            let _: redis::RedisResult<()> = redis::cmd("EXPIRE")
+                .arg(&prefixed)
+                .arg(window_secs)
+                .query_async(&mut conn)
+                .await;
+        }
+
+        if count > self.limit.max as u64 {
+            let retry = if ttl > 0 { ttl as u64 } else { window_secs as u64 };
+            return Err(retry.max(1));
+        }
+        Ok(self.limit.max - count as u32)
     }
 }
 
@@ -132,5 +217,25 @@ mod tests {
         // After the window, the bucket resets.
         let t1 = t0 + Duration::from_secs(61);
         assert_eq!(l.check_at("k", t1).await, Ok(0));
+    }
+
+    #[tokio::test]
+    async fn dispatch_through_enum_routes_to_backend() {
+        let rl = RateLimiter::InMemory(limiter(2, 60));
+        assert_eq!(rl.check("k").await, Ok(1));
+        assert_eq!(rl.check("k").await, Ok(0));
+        assert!(rl.check("k").await.is_err());
+    }
+
+    /// Smoke check that a Redis URL pointing at a closed port surfaces
+    /// the connect error rather than panicking.
+    #[tokio::test]
+    async fn redis_connect_error_surfaces() {
+        let result = RedisRateLimiter::connect(
+            "redis://127.0.0.1:1/", // port 1 = closed
+            Limit::default(),
+        )
+        .await;
+        assert!(result.is_err());
     }
 }
