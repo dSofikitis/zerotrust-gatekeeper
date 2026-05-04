@@ -45,6 +45,16 @@ services:
     ports:
       - "8081:8081"
 
+  backend-echo:
+    build:
+      context: ../../services/backend-echo
+    image: zerotrust-gatekeeper/backend-echo:dev
+    container_name: zt-backend-echo
+    environment:
+      ECHO_ADDR: ":8082"
+    ports:
+      - "8082:8082"
+
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: zt-prometheus
