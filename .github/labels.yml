@@ -1,0 +1,27 @@
+- name: bug
+  color: d73a4a
+  description: Something is not working
+- name: enhancement
+  color: a2eeef
+  description: New feature or request
+- name: security
+  color: b60205
+  description: Auth, authz, mTLS, secrets, or policy change
+- name: policy
+  color: 0e8a16
+  description: Rego / OPA change
+- name: infra
+  color: 5319e7
+  description: CI/CD, Compose, Terraform, or deploy change
+- name: terraform
+  color: 5319e7
+  description: deploy/terraform/*
+- name: gateway
+  color: fbca04
+  description: services/gateway
+- name: auth-issuer
+  color: fbca04
+  description: services/auth-issuer
+- name: backend-echo
+  color: fbca04
+  description: services/backend-echo

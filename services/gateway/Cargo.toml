@@ -1,0 +1,18 @@
+[package]
+name = "zt-gateway"
+version = "0.1.0"
+edition = "2021"
+description = "ZeroTrust Gatekeeper — policy-as-code API gateway."
+license = "MIT"
+
+[lib]
+name = "zt_gateway"
+path = "src/lib.rs"
+
+[[bin]]
+name = "zt-gateway"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]

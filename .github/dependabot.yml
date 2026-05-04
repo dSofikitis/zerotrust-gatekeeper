@@ -1,0 +1,56 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    labels: [infra]
+
+  - package-ecosystem: gomod
+    directory: "/services/auth-issuer"
+    schedule:
+      interval: weekly
+    labels: [auth-issuer]
+
+  - package-ecosystem: gomod
+    directory: "/services/backend-echo"
+    schedule:
+      interval: weekly
+    labels: [backend-echo]
+
+  - package-ecosystem: cargo
+    directory: "/services/gateway"
+    schedule:
+      interval: weekly
+    labels: [gateway]
+
+  - package-ecosystem: docker
+    directory: "/services/gateway"
+    schedule:
+      interval: weekly
+    labels: [infra, gateway]
+
+  - package-ecosystem: docker
+    directory: "/services/auth-issuer"
+    schedule:
+      interval: weekly
+    labels: [infra, auth-issuer]
+
+  - package-ecosystem: docker
+    directory: "/services/backend-echo"
+    schedule:
+      interval: weekly
+    labels: [infra, backend-echo]
+
+  - package-ecosystem: terraform
+    directory: "/deploy/terraform/gcp"
+    schedule:
+      interval: weekly
+    labels: [infra, terraform]
+
+  - package-ecosystem: terraform
+    directory: "/deploy/terraform/aws"
+    schedule:
+      interval: weekly
+    labels: [infra, terraform]
