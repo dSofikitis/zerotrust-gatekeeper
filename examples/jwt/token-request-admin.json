@@ -1,0 +1,6 @@
+{
+  "username": "admin",
+  "tenant": "acme",
+  "roles": ["admin"],
+  "country": "GR"
+}
