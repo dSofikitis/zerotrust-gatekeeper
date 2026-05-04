@@ -1,16 +1,12 @@
-//! zt-gateway library: types and middleware for the ZeroTrust
-//! Gatekeeper API gateway. The full implementation (axum + tower
-//! + jsonwebtoken + governor) lands in phases 4-7.
+//! zt-gateway: the ZeroTrust Gatekeeper API gateway. mTLS termination
+//! lives behind [`tls`], the axum router behind [`server`], and
+//! runtime knobs behind [`config`]. JWT validation, OPA authorization,
+//! audit logging, and rate limiting layer onto the same router in
+//! phases 5-7.
+
+pub mod config;
+pub mod server;
+pub mod tls;
 
 /// Bumped per release.
-pub const GATEWAY_VERSION: &str = "0.1.0";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn version_is_set() {
-        assert!(!GATEWAY_VERSION.is_empty());
-    }
-}
+pub const GATEWAY_VERSION: &str = "0.2.0";
