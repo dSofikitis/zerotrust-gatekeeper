@@ -68,7 +68,7 @@ async fn main() -> Result<()> {
                     window_secs = cfg.rate_limit.window_secs,
                     "rate limit enabled (Redis-backed)"
                 );
-                Arc::new(RateLimiter::Redis(rl))
+                Arc::new(RateLimiter::Redis(Box::new(rl)))
             }
             Err(err) => {
                 tracing::warn!(
