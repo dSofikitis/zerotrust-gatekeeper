@@ -1,4 +1,4 @@
-FROM rust:1.95 AS build
+FROM rust:1.95-bookworm AS build
 WORKDIR /src
 # aws-lc-sys + ring need cmake
 RUN apt-get update && apt-get install --no-install-recommends -y cmake && rm -rf /var/lib/apt/lists/*
