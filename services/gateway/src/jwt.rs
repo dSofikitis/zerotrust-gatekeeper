@@ -145,7 +145,10 @@ mod tests {
     }
 
     fn keypair() -> (RsaPrivateKey, RsaPublicKey) {
-        let mut rng = rand::thread_rng();
+        // Use rsa's bundled OsRng so we stay on the rand_core version
+        // rsa was built against — avoids a duplicate-rand_core in the
+        // test dep tree if anything else pulls in `rand`.
+        let mut rng = rsa::rand_core::OsRng;
         let priv_key = RsaPrivateKey::new(&mut rng, 2048).expect("gen rsa");
         let pub_key = RsaPublicKey::from(&priv_key);
         (priv_key, pub_key)

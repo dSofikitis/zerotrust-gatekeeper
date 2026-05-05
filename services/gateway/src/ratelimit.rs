@@ -43,9 +43,14 @@ impl Default for Limit {
 
 /// Backend-agnostic rate-limit handle. The middleware holds an
 /// `Arc<RateLimiter>` and never sees which backend is wired.
+///
+/// The Redis variant is boxed because [`redis::aio::ConnectionManager`]
+/// is significantly larger than the in-memory map handle; without
+/// the box, every `Arc<RateLimiter>` would carry the full Redis
+/// connection state regardless of which variant is active.
 pub enum RateLimiter {
     InMemory(InMemoryRateLimiter),
-    Redis(RedisRateLimiter),
+    Redis(Box<RedisRateLimiter>),
 }
 
 impl RateLimiter {
@@ -164,7 +169,11 @@ impl RedisRateLimiter {
         }
 
         if count > self.limit.max as u64 {
-            let retry = if ttl > 0 { ttl as u64 } else { window_secs as u64 };
+            let retry = if ttl > 0 {
+                ttl as u64
+            } else {
+                window_secs as u64
+            };
             return Err(retry.max(1));
         }
         Ok(self.limit.max - count as u32)
