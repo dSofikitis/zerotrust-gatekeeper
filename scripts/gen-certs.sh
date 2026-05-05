@@ -11,6 +11,15 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Git Bash on Windows rewrites a leading `/CN=...` as a filesystem
+# path (`C:/Program Files/Git/CN=...`). Setting MSYS_NO_PATHCONV
+# would also break the `-out path` arguments, so we use the
+# double-slash escape for subject strings only.
+SUBJ_ROOT="//"
+if [ "${OSTYPE-}" != "msys" ] && [ "${OSTYPE-}" != "cygwin" ]; then
+    SUBJ_ROOT="/"
+fi
 DST="$HERE/certs"
 mkdir -p "$DST"
 
@@ -23,7 +32,7 @@ if [ ! -f "$DST/ca.key" ]; then
     openssl genrsa -out "$DST/ca.key" 4096 >/dev/null 2>&1
     openssl req -x509 -new -nodes -key "$DST/ca.key" \
         -sha256 -days "$DAYS" \
-        -subj "/CN=ZeroTrust Dev CA/O=zt-dev" \
+        -subj "${SUBJ_ROOT}CN=ZeroTrust Dev CA/O=zt-dev" \
         -out "$DST/ca.crt" >/dev/null 2>&1
 fi
 
