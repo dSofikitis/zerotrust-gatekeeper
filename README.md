@@ -144,4 +144,4 @@ same lint + test matrix across Rust, Go, and OPA on every push to
 `main` and every PR.
 
 ## License
-MIT. Copyright (c) 2026 @dSofikitis.
+MIT — © 2026 [Dimitris Sofikitis](https://dimitrisofikitis.com). See [LICENSE](LICENSE).
