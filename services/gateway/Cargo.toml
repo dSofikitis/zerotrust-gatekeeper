@@ -35,5 +35,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 [dev-dependencies]
 base64 = "0.22"
 http-body-util = "0.1"
-rsa = "0.9"
+rsa = "0.10"
 wiremock = "0.6"
